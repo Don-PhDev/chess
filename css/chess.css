@@ -1,0 +1,149 @@
+#cboard {
+    width: 100%;
+}
+table {
+    border-collapse:collapse;
+}
+#board {
+    width: 60%;
+    background-image: url(img/clear.png);
+}
+#board td {
+    height: 5em;
+    width: 11.5%;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+}
+#board td span {
+    display: none;
+}
+
+#column-label {
+    margin-left: 2.25em;
+}
+#column-label td {
+    width: 5em;
+    text-align: center;
+    color: #999;
+    line-height: 2em;
+}
+
+#rank-label {
+    float: left;
+    margin-top: 0.3em;
+    width: 2em;
+    text-align: center;
+}
+#rank-label td {
+    line-height: 5em;
+    color: #999;
+}
+
+.direction-grp{
+    clear: both; float: left; margin: 0 7em; text-align: center; width: 32.6em;
+}
+.debug {
+    clear: both;
+    float: left;
+    margin-top: 20px;
+    width: 46em;
+    border: 1px dotted red;
+    text-align: left;
+}
+.debug ul {
+    list-style-type: none;
+}
+.debug .moves {
+    float: left;
+    width: 50%;
+}
+button.direction {
+    font-size: 2em;
+    background: #ccc;
+    width: 2em;
+    height: 2em;
+}
+
+td.mov {
+    padding: 1px 20px;
+}
+
+label {
+    margin: 4px;
+}
+
+/**
+ * Green board theme
+ */
+div.cgreen {
+    float: left;
+    border-top: 3em solid #3F623F;
+    border-bottom: 1em solid #3F623F;
+    border-left: 1em solid #3F623F;
+    border-right: 3em solid #3F623F;
+    background-color: #3F623F;
+}
+table.green#board tbody {
+    border: thin solid #fff;
+    background-color: #fff;
+}
+.green#board tr:nth-child(odd) td:nth-child(even) {background: #7a7}
+.green#board tr:nth-child(even) td:nth-child(odd) {background: #7a7}
+
+/**
+ * Brown board theme
+ */
+div.cbrown {
+    float: left;
+    border-top: 3em solid #714019;
+    border-bottom: 1em solid #714019;
+    border-left: 1em solid #714019;
+    border-right: 3em solid #714019;
+    background-color: #714019;
+}
+table.cbrown {
+    margin: 0 auto;
+}
+table.brown#board tbody {
+    border: thin solid #fff;
+    background-color: #FBCC90;
+}
+.brown#board tr:nth-child(odd) td:nth-child(even) {background: #9E6327}
+.brown#board tr:nth-child(even) td:nth-child(odd) {background: #9E6327}
+
+/**
+ * Rosewood board theme
+ */
+div.crosewood {
+    float: left;
+    border-top: 3em solid #380D0A;
+    border-bottom: 1em solid #380D0A;
+    border-left: 1em solid #380D0A;
+    border-right: 3em solid #380D0A;
+    background-color: #380D0A;
+}
+table.rosewood#board tbody {
+    border: thin solid #999;
+    background-color: #F0CCAC;
+}
+.rosewood#board tr:nth-child(odd) td:nth-child(even) {background: #682A00}
+.rosewood#board tr:nth-child(even) td:nth-child(odd) {background: #682A00}
+
+/**
+ * Black board theme
+ */
+div.cblack {
+    float: left;
+    border-top: 3em solid #222;
+    border-bottom: 1em solid #222;
+    border-left: 1em solid #222;
+    border-right: 3em solid #222;
+    background-color: #222;
+}
+table.black#board tbody {
+    border: thin solid #999;
+    background-color: #E2E5D3;
+}
+.black#board tr:nth-child(odd) td:nth-child(even) {background: #535C5E}
+.black#board tr:nth-child(even) td:nth-child(odd) {background: #535C5E}

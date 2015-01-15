@@ -1,0 +1,27 @@
+/**
+ * THEME: green
+ */
+.green > div {background-color: #fff; }
+.green > div:nth-child(odd) > div:nth-child(even) {background: #7a7}
+.green > div:nth-child(even) > div:nth-child(odd) {background: #7a7}
+
+/**
+ * THEME: brown
+ */
+.brown > div {background-color: #FBCC90; }
+.brown > div:nth-child(odd) > div:nth-child(even) {background: #9E6327}
+.brown > div:nth-child(even) > div:nth-child(odd) {background: #9E6327}
+
+/**
+ * THEME: brown
+ */
+.rosewood > div {background-color: #F0CCAC; }
+.rosewood > div:nth-child(odd) > div:nth-child(even) {background: #682A00}
+.rosewood > div:nth-child(even) > div:nth-child(odd) {background: #682A00}
+
+/**
+ * THEME: brown
+ */
+.black > div {background-color: #E2E5D3; }
+.black > div:nth-child(odd) > div:nth-child(even) {background: #535C5E}
+.black > div:nth-child(even) > div:nth-child(odd) {background: #535C5E}

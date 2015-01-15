@@ -1,0 +1,91 @@
+#container {
+    width: 48%;
+    float: left;
+    margin-left: 16px;
+}
+#board {
+    border: 1px solid black;
+}
+#board > div {
+    position: relative;
+    width: 100%;
+    padding-bottom: 12.5%; 
+}
+.c {
+    position: absolute;
+    width: 12.5%;
+    height: 100%;
+}
+.cola {left: 0; } .colb {left: 12.5%; } .colc {left: 25%; } .cold {left: 37.5%; } .cole {left: 50%; } .colf {left: 62.5%; } .colg {left: 75%; } .colh {left: 87.5%; }
+
+#rlabel {
+    float: left;
+    width: 100%;
+    margin-left: -16px;
+}
+#rlabel > div {
+    position: relative;
+    padding-bottom: 12.5%; 
+}
+#rlabel > div > div {
+    position: absolute;
+    top: 43%;
+    left: 4px;
+}
+
+#clabel {
+    width: 100%;
+    line-height: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+#clabel div {
+    float: left;
+    width: 12.5%;
+    text-align: center;
+}
+#gv {
+    float: left;
+    padding-right: -16px;
+}
+#gv h1 {
+    text-align: center;
+}
+#gv textarea {
+    width: 100%;
+}
+#board span {
+    display: none;
+}
+.moves {
+    clear: right;
+}
+.moves thead, .moves tfoot {
+    font-weight: bold;
+    font-size: 1em;
+}
+.moves td {
+    padding: 0 4px;
+}
+.red {
+    color: red;
+}
+.hide {
+    display: none;
+}
+#opt_right {
+    float: right;
+}
+#opt_right label {
+    cursor: pointer;
+}
+.clickmark {
+    background-color: yellow !important;
+}
+img {
+    max-width:84% !important;
+    height:auto;
+    display:block;
+    margin: 6% auto;
+    z-index: 2;
+}

@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en" ng-app>
+<head>
+<meta charset="utf-8">
+<title>New Page</title>
+<link rel="stylesheet" href="css/reset.css">
+<link rel="stylesheet" href="css/page.css">
+<link rel="stylesheet" href="css/board-themes.css">
+<link rel="stylesheet" href="css/chess_pieces_sharp.css">
+<script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+<script src="http://code.jquery.com/ui/1.10.2/jquery-ui.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.0.1/angular.min.js"></script>
+<script src="js/immortalgame.js"></script>
+<script>
+$(function(){
+    var C = {
+        offset: {},
+        board: $('div#board'),
+        board_mid: $('div#board').height() / 2,
+        from_offset: {}
+    };
+
+    $('img').draggable({
+        containment: [
+            C.board.offset().top - 12,
+            C.board.offset().left - 12,
+            C.board.height() - 30,
+            C.board.width() - 40
+        ],
+        start: function( event, ui ) {
+            console.log('S.1', ui.offset);
+            C.from_offset = ui.offset;
+        },
+        stop: function( event, ui ) {
+            // $(this).css('top', C.board_mid);
+            // $(this).css('left', C.board_mid);
+            console.log('top', ui.offset.top - C.from_offset.top);
+            $(this).css('top',  ui.offset.top - C.from_offset.top);
+            $(this).css('left', ui.position.left);
+            console.log('compare: ', C.board_mid, ui.position.top)
+            console.log('e.1', ui.offset)
+            console.log([C.board.height() / 2, C.board_mid])
+        },
+        cursor: 'pointer',
+        stack: '#board img'
+    });
+});
+</script>
+</head>
+<body ng-controller="chess" ng-init="initBoard()">
+<div style="width: 100%">
+    <div id="container">
+        <div id="clabel"><div ng-repeat="i in col_label">{{ i }}</div></div>
+        <div id="rlabel"><div ng-repeat="i in rank_label"><div>{{ i }}</div></div></div>
+
+        <div id="board" class="{{ btheme }}">
+            <div ng-repeat="(h,rank) in board">
+                <div ng-repeat="(i,m) in rank" class="c col{{ colname[i] }} {{ board[h][i].b }}" ng-click="squareClick(h, i)">
+                    <img src="pieces/{{ ptheme }}/{{ m.c | lowercase }}_{{ m.p | lowercase }}.png">
+                </div>
+            </div>
+        </div>
+
+        <div id="options">
+            <label>Pawn Promotion:
+                <select ng-model="promote_to_piece">
+                    <option value="Q">Queen</option>
+                    <option value="R">Rook</option>
+                    <option value="B">Bishop</option>
+                    <option value="N">Knight</option>
+                </select>
+            </label>
+            <div id="opt_right">
+                <label>Animation:
+                    <select ng-model="animation">
+                        <option value="0">lightning</option>
+                        <option value="250">very fast</option>
+                        <option value="500">fast</option>
+                        <option value="1000">normal</option>
+                        <option value="2000">slow</option>
+                    </select>
+                </label>
+                <label>Theme: <select ng-model="btheme"><option value="green">green</option><option value="brown">brown</option><option value="rosewood">rosewood</option><option value="black">black</option></select></label>
+            </div>
+        </div>
+    </div>
+    <div id="gv">
+        <h1>Game to view</h1>
+        <textarea ng-model="pgn_string" rows="20" ng-change="loadGame()"></textarea>
+        <div>
+            <button ng-click="clearBoard()">|&lt;</button>
+            <button ng-click="prevMove()">&lt;</button>
+            <button ng-click="nextMove(true)">&gt;</button>
+            <button ng-click="autoPlay(true)">&gt;|</button>
+            <button ng-click="immortalGame(true)">Immortal Game</button>
+            <button ng-click="eraseGame(true)">clear</button>
+        </div>
+        <div class="red">{{ checkMsg }}</div>
+        <div>
+            Orientation:
+            <label><input ng-model="orientation" ng-click="checkOrientation()" type="radio" name="rador" value="whtor">White</label>
+            <label><input ng-model="orientation" ng-click="checkOrientation()" type="radio" name="rador" value="blkor">Black</label>
+        </div>
+    </div>
+    <div class="moves">
+        <table>
+            <thead>
+                <tr><td>Moves: </td><td class="{{ eog }}" colspan="2">End of game</td></tr>
+            </thead>
+            <tbody>
+                <tr ng-repeat="(i,movs) in notation"><td>{{ i + 1}}.</td><td>{{ movs[0] }}</td><td>{{ movs[1] }}</td></tr>
+            </tbody>
+            <tfoot>
+                <tr class="{{ eog }}"><td>Result:</td><td colspan="2">{{ result }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+<script>
+chess = function ($scope){
+    var testa = function(){
+        alert('Hello');
+    }
+
+    $scope.btheme = 'brown';
+    $scope.ptheme = 'sharp';
+    $scope.horientation = 'whtor';
+    $scope.orientation = 'whtor';
+    $scope.animation = 250;
+    $scope.eog = 'hide';
+    $scope.promote_to_piece = 'Q';
+    $scope.piece_models = {};
+
+    $scope.colname = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    $scope.ranknum = [8, 7, 6, 5, 4, 3, 2, 1];
+    $scope.col_label = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    $scope.rank_label = [8, 7, 6, 5, 4, 3, 2, 1];
+
+    $scope.pgn_string = "";
+    $scope.moves = [];
+    $scope.notation = [];
+    $scope.history = [];
+    $scope.result = "";
+    $scope.ptr = 0;
+    $scope.isAutoPlay = false;
+
+    $scope.marked;
+
+    $scope.kingLocation = {
+        W: { column: 'e', rank: 1 },
+        B: { column: 'e', rank: 8 }
+    }
+    $scope.checkMsg = "";
+
+    $scope.initBoard = function(){
+        $scope.board = [
+            [{p:'R',c:'B',b:''}, {p:'N',c:'B',b:''}, {p:'B',c:'B',b:''}, {p:'Q',c:'B',b:''}, {p:'K',c:'B',b:''}, {p:'B',c:'B',b:''}, {p:'N',c:'B',b:''}, {p:'R',c:'B',b:''}],
+            [{p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}, {p:'P',c:'B',b:''}],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            [{p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}, {p:'P',c:'W',b:''}],
+            [{p:'R',c:'W',b:''}, {p:'N',c:'W',b:''}, {p:'B',c:'W',b:''}, {p:'Q',c:'W',b:''}, {p:'K',c:'W',b:''}, {p:'B',c:'W',b:''}, {p:'N',c:'W',b:''}, {p:'R',c:'W',b:''}],
+        ];
+
+        $scope.piece_models = {
+            black: { R: $scope.board[0][0], N: $scope.board[0][1], B: $scope.board[0][2], Q: $scope.board[0][3] },
+            white: { R: $scope.board[7][0], N: $scope.board[7][1], B: $scope.board[7][2], Q: $scope.board[7][3] }
+        }
+
+        if ($scope.orientation === 'blkor') {
+            $scope.horientation = 'whtor';
+            $scope.checkOrientation();
+        }
+    }
+
+    $scope.squareClick = function(nRank, nCol){
+
+        var algColumn = $scope.toAlgebraic('column', nCol),
+            algRank = $scope.toAlgebraic('rank', nRank),
+            validmov;
+
+        /**
+         * First click: selection
+         */
+        if (typeof $scope.marked === 'undefined') {
+
+            if ($scope.ptr % 1 == 0) {
+                if ($scope.board[nRank][nCol].c === 'B') {
+                    return false; // White's turn, not black
+                }
+            } else {
+                if ($scope.board[nRank][nCol].c === 'W') {
+                    return false; // White's turn, not black
+                }
+            }
+
+            if (typeof $scope.board[nRank][nCol] === 'object') {
+                // Click on occupied square
+                $scope.marked = {
+                    square: $scope.board[nRank][nCol],
+                    column: algColumn,
+                    rank: algRank,
+                };
+
+                $scope.board[nRank][nCol].b = 'clickmark';
+            }
+            return;
+        }
+
+        /**
+         * Second click: placement
+         */
+        if ($scope.marked.square.c === $scope.board[nRank][nCol].c) {
+            /**
+             * Second click but on same color piece
+             */
+            if ($scope.marked.column === algColumn && $scope.marked.rank === algRank) {
+                /**
+                 * Clicked on same piece twice, unmark it
+                 */
+                $scope.board[nRank][nCol].b = '';
+                delete $scope.marked;
+
+            } else {
+                /**
+                 * Clicked on another piece, move the mark
+                 */
+                $scope.board[ $scope.toZeroIndex($scope.marked.rank) ][ $scope.toZeroIndex($scope.marked.column) ].b = '';
+                $scope.board[nRank][nCol].b = 'clickmark';
+
+                if (typeof $scope.board[nRank][nCol] === 'object') {
+                    // Click on occupied square
+                    $scope.marked = {
+                        square: $scope.board[nRank][nCol],
+                        column: algColumn,
+                        rank: algRank,
+                    };
+                }
+            }
+
+        } else if (typeof $scope.marked === 'object') {
+            /**
+             * Second click
+             */
+            $scope.executeMove($scope.marked, {nColumn: nCol, nRank: nRank, column: algColumn, rank: algRank});
+            delete $scope.marked;
+        }
+    }
+
+    $scope.executeMove = function(from, dest, move){
+
+        var nCol,
+            nRank,
+            piece,
+            movet,
+            algRank = dest.rank,
+            algColumn = dest.column,
+            shortCastling = move === 'O-O',
+            longCastling = move === 'O-O-O',
+            isValid = true;
+
+        if (!shortCastling && !longCastling) {
+            piece = from.hasOwnProperty('square') ? from.square.p : $scope.inSquare(from.rank, from.column).p;
+            nCol = dest.hasOwnProperty('nColumn') ? dest.nColumn : $scope.toZeroIndex(dest.column);
+            nRank = dest.hasOwnProperty('nRank') ? dest.nRank : $scope.toZeroIndex(dest.rank);
+        }
+
+        if (shortCastling || longCastling || $scope.board[nRank][nCol] === '') {
+            /**
+             * Non-capture move
+             */
+            movet = {type: '-'};
+
+            if (shortCastling) {
+                validmov = 'short_castling';
+            } else if (longCastling) {
+                validmov = 'long_castling';
+            } else {
+                validmov = $scope.validMove(piece, 
+                    {column: $scope.toZeroIndex(from.column), rank: $scope.toZeroIndex(from.rank)}, 
+                    {column: nCol, rank: nRank}, movet);
+            }
+
+            if (validmov === true) {
+
+                if (movet.type === 'pawn_promote') {
+                    
+                    $scope.placeMove({ 
+                        piece: from.p, 
+                        from: { column: from.column, rank: from.rank }, 
+                        dest: { column: algColumn, rank: algRank },
+                        move: algColumn + algRank + '=' + $scope.promote_to_piece,
+                        promotion: true
+                    });
+                } else if (movet.type === 'xenpassant') {
+
+                    $scope.placeMove({ 
+                        piece: from.p, 
+                        from: { column: from.column, rank: from.rank }, 
+                        dest: { column: algColumn, rank: algRank },
+                        move: from.column + "x" + algColumn + algRank,
+                        xenpassant: true
+                    });
+                } else {
+
+                    $scope.placeMove({ 
+                        piece: from.p, 
+                        from: { column: from.column, rank: from.rank }, 
+                        dest: { column: algColumn, rank: algRank },
+                        move: (piece === 'P' ? "" : piece) + algColumn + algRank 
+                    });
+                }
+
+            } else if (validmov === 'short_castling') {
+                $scope.castles('short');
+
+            } else if (validmov === 'long_castling') {
+                $scope.castles('long');
+
+            } else {
+                // Remove mark on square
+                $scope.board[ $scope.toZeroIndex(from.rank) ][ $scope.toZeroIndex(from.column) ].b = '';
+                isValid = false;
+            }
+
+        } else {
+            /**
+             * Capture move
+             */
+            movet = {type: 'x'};
+            
+            if ($scope.validMove(piece, 
+                {column: $scope.toZeroIndex(from.column), rank: $scope.toZeroIndex(from.rank)}, 
+                {column: nCol, rank: nRank}, movet) === true) {
+
+                if (movet.type === 'pawn_capture_promote') {
+                    
+                    $scope.placeMove({ 
+                        piece: from.p, 
+                        from: { column: from.column, rank: from.rank }, 
+                        dest: { column: algColumn, rank: algRank },
+                        move: from.column + "x" + algColumn + algRank + '=' + $scope.promote_to_piece,
+                        promotion: true
+                    });
+                } else {
+
+                    $scope.placeMove({ 
+                        piece: from.p, 
+                        from: { column: from.column, rank: from.rank }, 
+                        dest: { column: algColumn, rank: algRank },
+                        move: (piece === 'P' ? from.column : piece) + "x" + algColumn + algRank 
+                    });
+                }
+            } else {
+                // Remove mark on square
+                $scope.board[ $scope.toZeroIndex(from.rank) ][ $scope.toZeroIndex(from.column) ].b = '';
+                isValid = false;
+            }
+        }
+
+        if (isValid === true) {
+
+            $scope.checkMsg = "";
+
+            if ($scope.isWhiteTurn()) {
+                if ($scope.isKingOnCheck( $scope.kingLocation.B, 'W')) {
+                    $scope.checkMsg = "Black king is checked!";
+                }
+            } else {
+                if ($scope.isKingOnCheck( $scope.kingLocation.W, 'B')) {
+                    $scope.checkMsg = "White king is checked!";
+                }
+            }
+        }
+
+        if (isValid === true) {
+            if (piece === 'K') {
+                /**
+                 * Update king location
+                 */
+                $scope.kingLocation[$scope.isWhiteTurn() ? 'W' : 'B'] = {
+                    column: algColumn,
+                    rank: parseInt(algRank)
+                }
+            }
+
+            $scope.ptr += 0.5;
+        }
+
+        return isValid;
+    }
+
+    $scope.isKingOnCheck = function(dest, color){
+
+        var rank,
+            column,
+            from,
+            movet = { type: 'x' };
+
+        for (rank = 0; rank <= 7; rank += 1) {
+            for (column = 0; column <= 7; column += 1) {
+
+                from = {
+                    rank: $scope.toAlgebraic('rank', rank),
+                    column: $scope.toAlgebraic('column', column)
+                };
+
+                if ($scope.board[rank][column].c === color) {
+
+                    if ($scope.board[rank][column].p === 'P') {
+                        if ($scope.isPawnMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                    
+                    if ($scope.board[rank][column].p === 'R') {
+                        if ($scope.isRookMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                    
+                    if ($scope.board[rank][column].p === 'N') {
+                        if ($scope.isKnightMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                    
+                    if ($scope.board[rank][column].p === 'B') {
+                        if ($scope.isBishopMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                    
+                    if ($scope.board[rank][column].p === 'Q') {
+                        if ($scope.isBishopMove(from, dest, movet)) {
+                            return true;
+                        }
+                        if ($scope.isRookMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                    
+                    if ($scope.board[rank][column].p === 'K') {
+                        if ($scope.isKingMove(from, dest, movet)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    $scope.castles = function(type){
+        var algRank = $scope.isWhiteTurn() ? 1 : 8;
+
+        if (type === 'short') {
+
+            if ($scope.inSquare(algRank, 'e').p === 'K' 
+             && typeof $scope.inSquare(algRank, 'f').p === 'undefined'
+             && typeof $scope.inSquare(algRank, 'g').p === 'undefined'
+             && $scope.inSquare(algRank, 'h').p === 'R') {
+
+                $scope.placeMove({ piece: 'K', from: { column: 'e', rank: algRank }, dest: { column: 'g', rank: algRank } });
+                $scope.placeMove({ piece: 'R', from: { column: 'h', rank: algRank }, dest: { column: 'f', rank: algRank }, castling: true, move: 'O-O' });
+            }
+        } else {
+
+            if ($scope.inSquare(algRank, 'a').p === 'R' 
+             && typeof $scope.inSquare(algRank, 'b').p === 'undefined'
+             && typeof $scope.inSquare(algRank, 'c').p === 'undefined'
+             && typeof $scope.inSquare(algRank, 'd').p === 'undefined'
+             && $scope.inSquare(algRank, 'e').p === 'K') {
+
+                $scope.placeMove({ piece: 'K', from: { column: 'e', rank: algRank }, dest: { column: 'c', rank: algRank } });
+                $scope.placeMove({ piece: 'R', from: { column: 'a', rank: algRank }, dest: { column: 'd', rank: algRank }, castling: true, move: 'O-O-O' });
+            }
+        }
+    }
+
+    $scope.inSquare = function(rank, column){
+        return $scope.board[ $scope.toZeroIndex(rank) ][ $scope.toZeroIndex(column) ];
+    }
+
+    $scope.isWhiteTurn = function(){
+        return ($scope.ptr % 1 === 0);
+    }
+
+    $scope.isBlackTurn = function(){
+        return ($scope.ptr % 1 === 0.5);
+    }
+
+    $scope.lastItem = function(param){
+        var len = param.length;
+        return param[len -1];
+    }
+
+    $scope.isPawnMove = function(from, dest, movet){
+
+        var distance,
+            lastItem;
+
+        if (movet.type === '-') {
+
+            if (dest.rank === 1 || dest.rank === 8) {
+                /**
+                 * Pawn promotion
+                 */
+                 movet.type = 'pawn_promote';
+            }
+
+            if (from.column === dest.column) {
+
+                if (from.rank === dest.rank) {
+                    return false;
+                }
+
+                if (from.rank === 2 || from.rank == 7) {
+                    distance = dest.rank -from.rank;
+
+                    if ($scope.isWhiteTurn() === true) {
+                        return distance === 1 || distance === 2;
+                    } else {
+                        return distance === -1 || distance === -2;
+                    }
+                } else {
+
+                    if ($scope.isWhiteTurn() === true) {
+                        return (dest.rank -from.rank) === 1;
+                    } else {
+                        return (from.rank -dest.rank) === 1;
+                    }
+                }
+
+            } else {
+                /**
+                 * Capture en passant?
+                 */
+                if ( ($scope.isWhiteTurn() && from.rank === 5) || ($scope.isBlackTurn() && from.rank === 4) ) {
+                    if (Math.abs( $scope.toZeroIndex(dest.column) - $scope.toZeroIndex(from.column) ) === 1) {
+                        if ($scope.inSquare(from.rank, dest.column).p === 'P') {
+                            /**
+                             * Check previous move to see if capturing is valid
+                             */
+                            lastItem = $scope.lastItem($scope.history);
+
+                            if (Math.abs(lastItem.dest.rank -lastItem.from.rank) === 2) {
+                                if (lastItem.dest.rank === from.rank && lastItem.dest.column === dest.column) {
+                                    movet.type = 'xenpassant';
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+        } else if (movet.type === 'x') {
+
+            if (dest.rank === 1 || dest.rank === 8) {
+                /**
+                 * Pawn promotion
+                 */
+                 movet.type = 'pawn_capture_promote';
+            }
+
+            if (from.column === dest.column) {
+                return false;
+            }
+            if (Math.abs(dest.rank - from.rank) === 1) {
+                if (Math.abs($scope.toZeroIndex(dest.column) -$scope.toZeroIndex(from.column)) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    $scope.validMove = function(piece, from, dest, movet){
+
+        var x,
+            algFrom = { column: $scope.toAlgebraic('column', from.column), rank: $scope.toAlgebraic('rank', from.rank) },
+            algDest = { column: $scope.toAlgebraic('column', dest.column), rank: $scope.toAlgebraic('rank', dest.rank) };
+
+        if (piece === 'P') {
+            return $scope.isPawnMove(algFrom, algDest, movet);
+
+        } else if (piece === 'N') {
+            return $scope.isKnightMove(algFrom, algDest);
+
+        } else if (piece === 'B') {
+            return $scope.isBishopMove(algFrom, algDest, movet);
+
+        } else if (piece === 'R') {
+            return $scope.isRookMove(algFrom, algDest, movet);
+
+        } else if (piece === 'Q') {
+            if ($scope.isBishopMove(algFrom, algDest, movet)) {
+                return true;
+            }
+            return $scope.isRookMove(algFrom, algDest, movet);
+
+        } else if (piece === 'K') {
+            return $scope.isKingMove(algFrom, algDest);
+
+        } else {
+            return false;
+        }
+    }
+
+    $scope.orient = function(n){
+        if ($scope.orientation === 'blkor') {
+            n = "76543210".indexOf(n);
+        }
+        return n;
+    }
+
+    $scope.toZeroIndex = function(param){
+        var n,
+            reverse = [];
+
+        if ( (n = $scope.colname.indexOf(param)) >= 0) {
+            return $scope.orient(n);
+        }
+        if ( (n = $scope.ranknum.indexOf(param)) >= 0) {
+            return $scope.orient(n);
+        }
+        alert('toZeroIndex\n\n\tInvalid param: ' + param);
+    }
+
+    $scope.toAlgebraic = function(type, param){
+        var idx;
+
+        param = $scope.orient(param);
+
+        if (type === 'column') {
+            idx = $scope.colname[param];
+            // idx = $scope.colname.indexOf(param);
+
+        } else if (type === 'rank') {
+            idx = $scope.ranknum[param];
+            // idx = $scope.ranknum.indexOf(param);
+
+        } else {
+            alert('toAlgebraic\n\n\tInvalid column|rank: ' + [type, param]);
+        }
+
+        if (typeof idx === 'undefined') {
+            alert('toAlgebraic\n\n\tInvalid param: ' + [type, param]);
+        } else {
+            return idx;
+        }
+    }
+
+    /**
+     * |<
+     */
+    $scope.clearBoard = function(doPlay){
+        if ($scope.prevMove() === true) {
+            setTimeout(function(){
+                $scope.clearBoard();
+                $scope.$apply();
+            }, 0);
+        }
+    }
+
+    /**
+     * <
+     */
+    $scope.prevMove = function(){
+        var m,
+            lastNotation;
+            
+        $scope.isAutoPlay = false;
+
+        if ($scope.ptr === 0) {
+            return false;
+        }
+
+        $scope.eog = 'hide';
+
+        m = $scope.history.pop();
+
+        // Restore from history
+        $scope.board[ $scope.toZeroIndex(m.dest.rank) ][ $scope.toZeroIndex(m.dest.column) ] = m.dest.square;
+        $scope.board[ $scope.toZeroIndex(m.from.rank) ][ $scope.toZeroIndex(m.from.column) ] = m.from.square;
+
+        if (typeof m.xenpassant === 'object') {
+            $scope.board[ $scope.toZeroIndex(m.from.rank) ][ $scope.toZeroIndex(m.dest.column) ] = m.xenpassant;
+        }
+
+        if (m.castling === true) {
+            // Move back King also because this was a castling move
+            $scope.prevMove();
+        } else {
+            lastNotation = $scope.notation.pop();
+
+            if (lastNotation.length === 2) {
+                // Undo previous pop by push, effect removal of one item only
+                $scope.notation.push([lastNotation[0]]);
+            }
+
+            $scope.ptr -= 0.5;
+        }
+
+        // Update king location
+        if (m.from.square.p === 'K') {
+            $scope.kingLocation[$scope.isWhiteTurn() ? 'W' : 'B'] = {
+                column: m.from.column,
+                rank: m.from.rank
+            }
+        }
+
+        // Check message
+        $scope.checkMsg = "";
+
+        if ($scope.isWhiteTurn()) {
+            if ($scope.isKingOnCheck( $scope.kingLocation.W, 'B')) {
+                $scope.checkMsg = "White king was on check";
+            }
+        } else {
+            if ($scope.isKingOnCheck( $scope.kingLocation.B, 'W')) {
+                $scope.checkMsg = "Black king was on check";
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * >
+     */
+    $scope.nextMove = function(isClicked){
+        var xMove,
+            move = $scope.moves[$scope.ptr];
+
+        if (isClicked === true) {
+            if ($scope.isAutoPlay === true) {
+                $scope.isAutoPlay = false;
+                return false;
+            }
+        }
+
+        if ($scope.moves.length === 0) {
+            $scope.immortalGame();
+        }
+
+        if ($scope.eog === 'red') {
+            // End of game
+            return false;
+        }
+
+        if ($scope.ptr % 1 == 0) {
+            move = $scope.moves[$scope.ptr][0];
+        } else {
+            move = $scope.moves[$scope.ptr -0.5][1];
+        }
+
+        xMove = $scope.evalMove(move);
+
+        if (xMove.valid) {
+
+            $scope.determineFrom(xMove.piece, xMove.from, xMove.dest, xMove.move_type);
+            $scope.executeMove(xMove.from, xMove.dest, xMove.move);
+        } else {
+
+            alert('Invalid move: ' + move);
+            return false;
+        }
+
+        if ($scope.endOfGame()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * >|
+     */
+    $scope.autoPlay = function(doPlay){
+
+        if (doPlay === true) {
+            $scope.isAutoPlay = !$scope.isAutoPlay;
+        }
+
+        if ($scope.isAutoPlay) {
+            if ($scope.nextMove() === true) {
+                setTimeout(function(){
+                    $scope.autoPlay();
+                    $scope.$apply();
+                }, $scope.animation);
+            }
+        }
+    }
+
+    $scope.checkOrientation = function(){
+
+        var column,
+            rank,
+            oneRank,
+            newBoard = [];
+
+        if ($scope.horientation !== $scope.orientation) {
+            $scope.horientation = $scope.orientation;
+
+            for (rank = 7; rank >= 0; rank -= 1) {
+                oneRank = [];
+                for (column = 7; column >= 0; column -= 1) {
+                    oneRank.push($scope.board[rank][column]);
+                }
+                newBoard.push(oneRank);
+            }
+            // Assign reoriented board
+            $scope.board = newBoard;
+
+            if ($scope.orientation === 'blkor') {
+                $scope.col_label = ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
+                $scope.rank_label = [1, 2, 3, 4, 5, 6, 7, 8];
+            } else {
+                $scope.col_label = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+                $scope.rank_label = [8, 7, 6, 5, 4, 3, 2, 1];
+            }
+        }
+    }
+
+    $scope.endOfGame = function(){
+        var eog;
+        // White is last move
+        eog = $scope.ptr === $scope.moves.length;
+        if (eog === false) {
+            // Black is last move
+            eog = $scope.ptr -0.5 === $scope.moves.length -1 && $scope.ptr % 1 !== 0 && $scope.moves[$scope.ptr -0.5].length === 1;
+        }
+        if (eog === true) {
+            $scope.eog = 'red';
+            $scope.isAutoPlay = false;
+        }
+        return eog;
+    }
+
+    $scope.evalMove = function(move){
+
+        var arr,
+            from, dest,
+            _1, _2, _3, _4,
+            ret = { from: {}, dest: {}, move: move };
+
+        _1 = move[0];
+        _2 = move[1];
+        _3 = move[2];
+        _4 = move[3];
+
+        if (move === 'O-O' || move === '0-0') {
+            ret.short_castling = true;
+        }
+
+        if (move === 'O-O-O' || move === '0-0-0') {
+            ret.long_castling = true;
+        }
+
+        if ( "abcdefgh".indexOf(_1) >= 0 ) {
+            ret.piece = 'P';
+            ret.from.column = _1;
+        } else {
+            ret.piece = _1;
+        }
+
+        if ( move.indexOf('x') >= 0 ) {
+            ret.move_type = 'x';
+
+            /**
+             * Capture
+             */
+            arr = move.split('x');
+            from = arr[0];
+            dest = arr[1];
+
+            if (arr.length === 2) {
+
+                if (from.length === 2) {
+                    if ("abcdefgh".indexOf(_2) >= 0) {
+                        /**
+                         * Explicit from column: Rhxd1
+                         */
+                        ret.from.column = _2;
+
+                    } else if ("12345678".indexOf(_2) >= 0) {
+                        /**
+                         * Explicit from row: R1xd4
+                         */
+                        ret.from.rank = parseInt(_2);
+
+                    } else {
+                        ret.valid = false;
+                    }
+                }
+
+                ret.dest.column = dest[0];
+                ret.dest.rank = parseInt(dest[1]);
+
+            } else {
+                ret.valid = false;
+            }
+
+        } else {
+
+            ret.move_type = '-';
+            
+            /**
+             * Non-capture move
+             */
+
+            if (ret.piece === 'P') {
+                ret.from.column = _1;
+                ret.dest.column = _1;
+                ret.dest.rank = parseInt(_2);
+
+            } else {
+
+                if ("abcdefgh".indexOf(_3) >= 0) {
+                    if ("abcdefgh".indexOf(_2) >= 0) {
+                        /**
+                         * Explicit from column: Rhd1
+                         */
+                        ret.from.column = _2;
+                        ret.dest.column = _3;
+                        ret.dest.rank = parseInt(_4);
+
+                    } else if ("12345678".indexOf(_2) >= 0) {
+                        /**
+                         * Explicit from row: R1d4
+                         */
+                        ret.from.rank = parseInt(_2);
+                        ret.dest.column = _3;
+                        ret.dest.rank = parseInt(_4);
+
+                    } else {
+                        ret.valid = false;
+                    }
+                } else {
+                    /**
+                     * Piece to destination: Bf4
+                     */
+                    ret.dest.column = _2;
+                    ret.dest.rank = parseInt(_3);
+                }
+            }
+        }
+
+        if (typeof ret.valid === 'undefined') {
+            ret.valid = true;
+        }
+
+        if (ret.dest.rank === 8) {
+
+            if (move.substring(2).indexOf('Q') >= 0) {
+                ret.promote_to_piece = 'Q';
+                ret.promotion = true;
+
+            } else if (move.substring(2).indexOf('R') >= 0) {
+                ret.promote_to_piece = 'R';
+                ret.promotion = true;
+                
+            } else if (move.substring(2).indexOf('B') >= 0) {
+                ret.promote_to_piece = 'B';
+                ret.promotion = true;
+                
+            } else if (move.substring(2).indexOf('N') >= 0) {
+                ret.promote_to_piece = 'N';
+                ret.promotion = true;
+            }
+        }
+
+        return ret;
+    }
+
+    $scope.determineFrom = function(piece, from, dest, move_type){
+
+        var x,
+            col,
+            rank,
+            color,
+            testFrom,
+            theFromCol,
+            theFromRank,
+            theLimitCol,
+            theLimitRank,
+            movet = {type: move_type};
+
+        if ($scope.ptr % 1 == 0) {
+            color = 'W';
+        } else {
+            color = 'B';
+        }
+
+        if (typeof dest.column !== 'string') {
+            alert('Error:\n\nDestination column should be string: ' + dest.column);
+            return false;
+        }
+
+        if (typeof dest.rank !== 'number') {
+            alert('Error:\n\nDestination rank should be numeric: ' + dest.rank);
+            return false;
+        }
+
+        theFromCol = (typeof from.column === 'string') ? $scope.toZeroIndex(from.column) : 0;
+        theFromRank = (typeof from.rank === 'number') ? $scope.toZeroIndex(from.rank) : 0;
+        theLimitCol = (typeof from.column === 'string') ? theFromCol : 7;
+        theLimitRank = (typeof from.rank === 'number') ? theFromRank : 7;
+
+        if (piece === 'P') {
+            col = $scope.toZeroIndex(from.column);
+
+            if (color === 'W') {
+                // White
+                for (x = (dest.rank -1); x >= 2; x -= 1) {
+                    if ($scope.board[ $scope.toZeroIndex(x) ][col].p === 'P') {
+                        from.rank = x;
+                        break;
+                    }
+                }
+            } else {
+                // Black
+                for (x = (dest.rank +1); x <= 7; x += 1) {
+                    if ($scope.board[ $scope.toZeroIndex(x) ][col].p === 'P') {
+                        from.rank = x;
+                        break;
+                    }
+                }
+            }
+
+        } else if (piece === 'N') {
+            for (col = theFromCol; col <= theLimitCol; col += 1) {
+                for (rank = theFromRank; rank <= theLimitRank; rank += 1) {
+                    if ($scope.board[rank][col].p === piece && $scope.board[rank][col].c === color) {
+                        
+                        testFrom = {column: $scope.toAlgebraic('column', col), rank: $scope.toAlgebraic('rank', rank)};
+                        
+                        if ($scope.isKnightMove(testFrom, dest)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+        } else if (piece === 'B') {
+            for (col = theFromCol; col <= theLimitCol; col += 1) {
+                for (rank = theFromRank; rank <= theLimitRank; rank += 1) {
+                    if ($scope.board[rank][col].p === piece && $scope.board[rank][col].c === color) {
+
+                        testFrom = {column: $scope.toAlgebraic('column', col), rank: $scope.toAlgebraic('rank', rank)};
+
+                        if ($scope.isBishopMove(testFrom, dest, movet)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+        } else if (piece === 'R') {
+            for (col = theFromCol; col <= theLimitCol; col += 1) {
+                for (rank = theFromRank; rank <= theLimitRank; rank += 1) {
+                    if ($scope.board[rank][col].p === piece && $scope.board[rank][col].c === color) {
+
+                        testFrom = {column: $scope.toAlgebraic('column', col), rank: $scope.toAlgebraic('rank', rank)};
+
+                        if ($scope.isRookMove(testFrom, dest, movet)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+        } else if (piece === 'Q') {
+            for (col = theFromCol; col <= theLimitCol; col += 1) {
+                for (rank = theFromRank; rank <= theLimitRank; rank += 1) {
+                    if ($scope.board[rank][col].p === piece && $scope.board[rank][col].c === color) {
+                        
+                        testFrom = {column: $scope.toAlgebraic('column', col), rank: $scope.toAlgebraic('rank', rank)};
+                        
+                        if ($scope.isBishopMove(testFrom, dest, movet)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                        
+                        if ($scope.isRookMove(testFrom, dest, movet)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+        } else if (piece === 'K') {
+            for (col = theFromCol; col <= theLimitCol; col += 1) {
+                for (rank = theFromRank; rank <= theLimitRank; rank += 1) {
+                    if ($scope.board[rank][col].p === piece && $scope.board[rank][col].c === color) {
+                        
+                        testFrom = {column: $scope.toAlgebraic('column', col), rank: $scope.toAlgebraic('rank', rank)};
+                        
+                        if ($scope.isKingMove(testFrom, dest)) {
+                            from.column = testFrom.column;
+                            from.rank = testFrom.rank;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    $scope.immortalGame = function(isClicked){
+        if (isClicked) {
+            $scope.isAutoPlay = false;
+        }
+        $scope.eraseGame();
+        $scope.pgn_string = immortalGame();
+        $scope.loadGame();
+    }
+
+    $scope.eraseGame = function(isClicked){
+        if (isClicked) {
+            $scope.isAutoPlay = false;
+        }
+        $scope.eog = 'hide';
+        $scope.pgn_string = "";
+        $scope.moves = [];
+        $scope.notation = [];
+        $scope.result = "";
+        $scope.checkMsg = "";
+        $scope.ptr = 0;
+        $scope.initBoard();
+    }
+
+    $scope.placeMove = function(m){
+        var nColFrom,
+            nColDest,
+            fromRank,
+            fromColumn,
+            destRank,
+            destColumn,
+            errMsg = '';
+
+        if (typeof m === 'undefined') {
+            alert("Cannot place undefined move: " + $scope.moves[$scope.ptr]);
+            m.valid = false;
+            return;
+        }
+
+        if (typeof m.from.column === 'undefined') errMsg += '\n\t\t* from column';
+        if (typeof m.from.rank === 'undefined') errMsg += '\n\t\t* from rank';
+        if (typeof m.dest.column === 'undefined') errMsg += '\n\t\t* destination column';
+        if (typeof m.dest.rank === 'undefined') errMsg += '\n\t\t* destination rank';
+
+        if (errMsg !== '') {
+            alert("Cannot place move\n\n\tMissing:" + errMsg);
+            m.valid = false;
+            return;
+        }
+
+        nColFrom = $scope.toZeroIndex( m.from.column ),
+        nColDest = $scope.toZeroIndex( m.dest.column );
+        fromRank = $scope.toZeroIndex( m.from.rank );
+        destRank = $scope.toZeroIndex( m.dest.rank );
+
+        $scope.history.push({
+            from: {
+                square: $scope.board[ fromRank ][ nColFrom ],
+                column: m.from.column,
+                rank: m.from.rank
+            },
+            dest: {
+                square: $scope.board[ destRank ][ nColDest ],
+                column: m.dest.column,
+                rank: m.dest.rank
+            },
+            castling: m.castling,
+            xenpassant: m.xenpassant ? $scope.board[ fromRank ][ nColDest ] : false,
+            promotion: m.promotion ? $scope.promote(m.promote_to_piece) : false
+        });
+
+        if (m.promotion === true) {
+            $scope.board[ destRank ][ nColDest ] = $scope.promote(m.promote_to_piece);
+        } else {
+            $scope.board[ destRank ][ nColDest ] = $scope.board[ fromRank ][ nColFrom ];
+        }
+
+        $scope.board[ fromRank ][ nColFrom ] = '';
+
+        if (m.xenpassant === true) {
+            $scope.board[ fromRank ][ nColDest ] = '';
+        }
+
+        // Reset click mark
+        $scope.board[ destRank ][ nColDest ].b = '';
+
+        m.valid = true;
+
+        if (typeof m.move === 'string') {
+            if ($scope.ptr % 1 == 0) {
+                $scope.notation.push([m.move]);
+            } else {
+                $scope.notation[$scope.ptr -0.5].push(m.move);
+            }
+        }
+    }
+
+    $scope.promote = function(promote_to_piece){
+
+        if ($scope.isWhiteTurn() === true) {
+            return $scope.piece_models.white[ (typeof promote_to_piece === 'string' ? promote_to_piece : $scope.promote_to_piece) ];
+        } else {
+            return $scope.piece_models.black[ (typeof promote_to_piece === 'string' ? promote_to_piece : $scope.promote_to_piece) ];
+        }
+    }
+
+    $scope.loadGame = function(){
+        var arr,
+            start = false,
+            move_pair = [],
+            ret_moves = [],
+            len,
+            x,
+            z;
+
+        $scope.result = "";
+
+        raw_pgn = $scope.pgn_string;
+        raw_pgn = raw_pgn.replace(/[^{}]+(?=})/g, " ").trim();
+        raw_pgn = raw_pgn.replace(/(\[.*?\])/g, " ").trim();
+        raw_pgn = raw_pgn.replace(new RegExp("(\r?\n|\n|\r)", "mg"), " ");
+        raw_pgn = raw_pgn.replace(/\.(\S)/g, '. $1');
+        raw_pgn = raw_pgn.replace(/\t/g, ' ');
+
+        arr = raw_pgn.split(' '),
+        len = arr.length;
+
+        for (x = 0; x < len; x += 1){
+            if (start === false && arr[x] === "1."){
+                start = true;
+                continue;
+            }
+
+            if (start === false){
+                continue;
+            }
+
+            if (arr[x][arr[x].length-1] === "."){
+
+                ret_moves.push(move_pair);
+                move_pair = [];
+
+            } else {
+
+                if (arr[x][0] === '{' || arr[x][0] === '}') {
+                    continue;
+                }
+
+                if (arr[x]) {
+                    move_pair.push(arr[x]);
+                }
+            }
+        }
+
+        if (x > 1) {
+            ret_moves.push(move_pair);
+        }
+
+        /**
+         * Interpret invalid move as result
+         */
+        for (x = (ret_moves.length -1); x > 0; x -= 1) {
+            for (z = (ret_moves[x].length -1); z >= 0; z -= 1) {
+                if ( "abcdefghRNBQKO".indexOf(ret_moves[x][z][0]) === -1) {
+                    // Invalid move
+                    $scope.result = ret_moves[x].pop() + $scope.result;
+                } else {
+                    // Valid move
+                    break;
+                }
+            }
+        }
+
+        $scope.moves = ret_moves;
+    }
+
+    $scope.isKingMove = function(from, dest){
+
+        var nFromCol = $scope.toZeroIndex(from.column),
+            nFromRank = $scope.toZeroIndex(from.rank),
+            nDestCol = $scope.toZeroIndex(dest.column),
+            nDestRank = $scope.toZeroIndex(dest.rank),
+            nDiffCol,
+            nDiffRank;
+
+        nDiffCol = Math.abs(nDestCol - nFromCol);
+        nDiffRank = Math.abs(nDestRank - nFromRank);
+
+        if (nDiffCol === 1 || nDiffCol === 0) {
+            if (nDiffRank === 1 || nDiffRank === 0) {
+                return true;
+            }
+        }
+
+        // TODO: Improve castling validation
+        if ((nFromRank === 0 || nFromRank === 7) && nFromRank === nDestRank) {
+            if ($scope.orientation === 'blkor') {
+                if (nDestCol === 1) {
+                    return 'short_castling';
+
+                } else if (nDestCol === 5) {
+                    return 'long_castling';
+                }
+            } else {
+                if (nDestCol === 2) {
+                    return 'long_castling';
+
+                } else if (nDestCol === 6) {
+                    return 'short_castling';
+                }
+            }
+        }
+
+        return false;
+    }
+
+    $scope.isRookMove = function(from, dest, movet){
+
+        var nFromCol = $scope.toZeroIndex(from.column),
+            nFromRank = $scope.toZeroIndex(from.rank),
+            nDestCol = $scope.toZeroIndex(dest.column),
+            nDestRank = $scope.toZeroIndex(dest.rank),
+            x;
+
+        if (nFromCol === nDestCol) {
+            if (nFromRank < nDestRank) {
+                for (x = (nFromRank +1); x <= nDestRank; x += 1) {
+                    if (x === nDestRank) {
+                        return true;
+                    }
+                    if (typeof $scope.board[x][nFromCol].p === 'string') {
+                        if (x === nDestRank) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            } else {
+                for (x = (nDestRank +1); x <= nFromRank; x += 1) {
+                    if (x === nFromRank) {
+                        return true;
+                    }
+                    if (typeof $scope.board[x][nFromCol].p === 'string') {
+                        if (x === nDestRank) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+
+        } else if (nFromRank === nDestRank) {
+            if (nFromCol < nDestCol) {
+                for (x = (nFromCol +1); x <= nDestCol; x += 1) {
+                    if (x === nDestCol) {
+                        return true;
+                    }
+                    if (typeof $scope.board[nFromRank][x].p === 'string') {
+                        if (x === nDestCol) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            } else {
+                for (x = (nDestCol +1); x <= nFromCol; x += 1) {
+                    if (x === nFromCol) {
+                        return true;
+                    }
+                    if (typeof $scope.board[nFromRank][x].p === 'string') {
+                        if (x === nDestCol) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    $scope.isBishopMove = function(from, dest, movet){
+
+        var nFromCol = $scope.toZeroIndex(from.column),
+            nFromRank = $scope.toZeroIndex(from.rank),
+            nDestCol = $scope.toZeroIndex(dest.column),
+            nDestRank = $scope.toZeroIndex(dest.rank),
+            c,
+            r;
+
+        c = nFromCol;
+        r = nFromRank;
+
+        if (c < nDestCol) {
+            if (r < nDestRank) {
+                while (c < nDestCol && r < nDestRank) {
+                    c += 1;
+                    r += 1;
+                    if (nDestCol === c && nDestRank === r) {
+                        return true;
+                    }
+                    if ($scope.board[r][c] && typeof $scope.board[r][c].p === 'string') {
+                        return false;
+                    }
+                }
+            } else {
+                while (c < nDestCol && r > nDestRank) {
+                    c += 1;
+                    r -= 1;
+                    if (nDestCol === c && nDestRank === r) {
+                        return true;
+                    }
+                    if ($scope.board[r][c] && typeof $scope.board[r][c].p === 'string') {
+                        return false;
+                    }
+                }
+            }
+        } else {
+            if (r < nDestRank) {
+                while (c > nDestCol && r < nDestRank) {
+                    c -= 1;
+                    r += 1;
+                    if (nDestCol === c && nDestRank === r) {
+                        return true;
+                    }
+                    if ($scope.board[r][c] && typeof $scope.board[r][c].p === 'string') {
+                        return false;
+                    }
+                }
+            } else {
+                while (c > nDestCol && r > nDestRank) {
+                    c -= 1;
+                    r -= 1;
+                    if (nDestCol === c && nDestRank === r) {
+                        return true;
+                    }
+                    if ($scope.board[r][c] && typeof $scope.board[r][c].p === 'string') {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    $scope.isKnightMove = function(from, dest){
+
+        var nFromCol = $scope.toZeroIndex(from.column),
+            nFromRank = $scope.toZeroIndex(from.rank),
+            nDestCol = $scope.toZeroIndex(dest.column),
+            nDestRank = $scope.toZeroIndex(dest.rank),
+            possible_moves = [],
+            x;
+
+        if ( (nFromCol -1) >= 0 && (nFromRank -2) >= 0) {
+            possible_moves.push( [nFromCol -1, nFromRank -2] );
+        }
+        if ( (nFromCol +1) <= 7 && (nFromRank -2) >= 0) {
+            possible_moves.push( [nFromCol +1, nFromRank -2] );
+        }
+
+        if ( (nFromCol -2) >= 0 && (nFromRank -1) >= 0) {
+            possible_moves.push( [nFromCol -2, nFromRank -1] );
+        }
+        if ( (nFromCol +2) <= 7 && (nFromRank -1) >= 0) {
+            possible_moves.push( [nFromCol +2, nFromRank -1] );
+        }
+
+        if ( (nFromCol -2) >= 0 && (nFromRank +1) <= 7) {
+            possible_moves.push( [nFromCol -2, nFromRank +1] );
+        }
+        if ( (nFromCol +2) <= 7 && (nFromRank +1) <= 7) {
+            possible_moves.push( [nFromCol +2, nFromRank +1] );
+        }
+
+        if ( (nFromCol -1) >= 0 && (nFromRank +2) <= 7) {
+            possible_moves.push( [nFromCol -1, nFromRank +2] );
+        }
+        if ( (nFromCol +1) <= 7 && (nFromRank +2) <= 7) {
+            possible_moves.push( [nFromCol +1, nFromRank +2] );
+        }
+
+        for (x = 0; x < possible_moves.length; x += 1) {
+            if (possible_moves[x][0] === nDestCol && possible_moves[x][1] === nDestRank) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+</script>
+</body>
+</html>
